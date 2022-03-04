@@ -1,0 +1,5 @@
+TxContract Add() {
+    fn add(x: U256, y: U256) -> (U256) {
+        return x + y
+    }
+}
