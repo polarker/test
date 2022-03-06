@@ -5,8 +5,12 @@ async function test() {
     const client = new CliqueClient({baseUrl: "http://127.0.0.1:12973"})
     await client.init(false)
 
-    const x = await Contract.fromContractPath(client, "add.ral")
-    console.log(`hello ${x}`)
+    const contract = await Contract.from(client, "add.ral")
+    console.log(`hello ${contract}`)
 }
 
-test()
+try {
+    test()
+} catch (err) {
+    console.log(err.error)
+}
