@@ -11,21 +11,21 @@ export class Contract {
     fileName: string
     sourceCodeSha256: string
     bytecode: string
-    fieldsSignature: string
+    fields: api.Fields
     functions: api.Function[]
     events: api.Event[]
 
     constructor(fileName: string,
                 sourceCodeSha256: string,
                 bytecode: string,
-                fieldsSignature: string,
+                fields: api.Fields,
                 functions: api.Function[],
                 events: api.Event[]
     ) {
         this.fileName = fileName
         this.sourceCodeSha256 = sourceCodeSha256
         this.bytecode = bytecode
-        this.fieldsSignature = fieldsSignature
+        this.fields = fields
         this.functions = functions
         this.events = events
     }
@@ -59,10 +59,10 @@ export class Contract {
 
     private static async _from(client: CliqueClient, fileName: string, contractStr: string, contractHash: string): Promise<Contract> {
         const compiled = (await client.contracts.postContractsCompileContract({code: contractStr})).data
-        if (isNull(compiled.bytecode) || isNull(compiled.fieldsSignature) || isNull(compiled.functions) || isNull(compiled.events)) {
+        if (isNull(compiled.bytecode) || isNull(compiled.fields) || isNull(compiled.functions) || isNull(compiled.events)) {
             throw new Event("Compilation did not return the right data")
         }
-        const artifact = new Contract(fileName, contractHash, compiled.bytecode, compiled.fieldsSignature, compiled.functions, compiled.events)
+        const artifact = new Contract(fileName, contractHash, compiled.bytecode, compiled.fields, compiled.functions, compiled.events)
         await artifact._saveToFile()
         return artifact
     }
@@ -80,6 +80,143 @@ export class Contract {
     }
 
     toString(): string {
-        return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, fieldsSignature: this.fieldsSignature, functions: this.functions, events: this.events }, null, 2)
+        return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, fields: this.fields, functions: this.functions, events: this.events }, null, 2)
     }
+
+    async test(client: CliqueClient, funcName: string, params: TestContractParams): Promise<api.TestContractResult> {
+        const apiParams: api.TestContract = this.toTestContract(funcName, params)
+        return client.contracts.postContractsTestContract(apiParams).then(response => response.data)
+    }
+
+    toApiFields(fields?: Val[]): api.Val[] {
+        if (isNull(fields)) {
+            return null
+        } else {
+            if (fields.length === this.fields.types.length) {
+                fields.map((field, index) => toApiVal(field, this.fields.types[index]))
+            } else {
+                throw new Error(`Invalid number of fields: ${fields}`)
+            }
+        }
+    }
+
+    toApiArgs(funcName: string, args?: Val[]): api.Val[] {
+        if (isNull(args)) {
+            return null
+        } else {
+            const func = this.functions.find(func => func.id == funcName)
+            if (isNull(func)) {
+                throw new Error(`Invalid function name: ${funcName}`)
+            }
+
+            if (args.length === func.argTypes.length) {
+                return args.map((arg, index) => toApiVal(arg, func.argTypes[index]))
+            } else {
+                throw new Error(`Invalid number of arguments: ${args}`)
+            }
+        }
+    }
+
+    toTestContract(funcName: string, params: TestContractParams): api.TestContract {
+        return {
+            group: params.group,
+            contractId: params.contractId,
+            bytecode: this.bytecode,
+            initialFields: this.toApiFields(params.initialFields),
+            initialAsset: toApiAsset(params.initialAsset),
+            testMethodIndex: params.testMethodIndex,
+            testArgs: this.toApiArgs(funcName, params.testArgs),
+            existingContracts: params.existingContracts,
+            inputAssets: params.inputAssets
+        }
+    }
+}
+
+type Number256 = number | bigint
+type Val = Number256 | boolean | string
+
+function extractBoolean(v: Val): boolean {
+    if (typeof v === "boolean") {
+        return v
+    } else {
+        throw new Error(`Invalid boolean value: ${v}`)
+    }
+}
+
+// TODO: check integer bounds
+function extractNumber256(v: Val): string {
+    if ((typeof v === "number" && Number.isInteger(v)) || typeof v === "bigint") {
+        return v.toString()
+    } else {
+        throw new Error(`Invalid 256 bit number: ${v}`)
+    }
+}
+
+// TODO: check the format of hex string and base58 string
+function extractString(v: Val): string {
+    if (typeof v === "string") {
+        return v
+    } else {
+        throw new Error(`Invalid string: ${v}`)
+    }
+}
+
+function toApiVal(v: Val, tpe: string): api.Val {
+    if (tpe === "Bool") {
+        return { value: extractBoolean(v), type: tpe }
+    } else if (tpe === "U256" || tpe === "I256") {
+        return { value: extractNumber256(v), type: tpe }
+    } else if (tpe === "ByteVec" || tpe === "Address") {
+        return { value: extractString(v), type: tpe }
+    } else {
+        throw new Error(`Invalid Val type: ${tpe}`)
+    }
+}
+
+interface Asset {
+  alphAmount: Number256
+  tokens: Token[]
+}
+
+interface Token {
+  id: string
+  amount: Number256
+}
+
+function toApiToken(token: Token): api.Token {
+    return { id: token.id, amount: extractNumber256(token.amount) }
+}
+
+function toApiAsset(asset?: Asset): api.Asset2 {
+    if (isNull(asset)) {
+        return null
+    } else {
+        return {
+            alphAmount: extractNumber256(asset.alphAmount),
+            tokens: asset.tokens.map(toApiToken)
+        }
+    }
+}
+
+interface ExistingContract {
+  id: string
+  code: string
+  fields: Val[]
+  asset: Asset
+}
+
+interface InputAsset {
+  address: string
+  asset: Asset
+}
+
+export interface TestContractParams {
+    group?: number; // default 0
+    contractId?: string; // default a bytestring of zeros
+    initialFields?: Val[]; // default no fields
+    initialAsset?: Asset; // default 1 ALPH
+    testMethodIndex?: number; // default 0
+    testArgs?: Val[]; // default no arguments
+    existingContracts?: api.ExistingContract[]; // default no existing contracts
+    inputAssets?: api.InputAsset[]; // default no input asserts
 }

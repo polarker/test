@@ -7,10 +7,8 @@ async function test() {
 
     const contract = await Contract.from(client, "add.ral")
     console.log(`hello ${contract}`)
+
+    const testResult = contract.test(client, "add", {testArgs: [1, 2]})
 }
 
-try {
-    test()
-} catch (err) {
-    console.log(err.error)
-}
+test().catch(error => console.log(error))
