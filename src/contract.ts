@@ -90,7 +90,7 @@ export class Contract {
 
     toApiFields(fields?: Val[]): api.Val[] {
         if (isNull(fields)) {
-            return null
+            return undefined
         } else {
             if (fields.length === this.fields.types.length) {
                 fields.map((field, index) => toApiVal(field, this.fields.types[index]))
@@ -102,9 +102,9 @@ export class Contract {
 
     toApiArgs(funcName: string, args?: Val[]): api.Val[] {
         if (isNull(args)) {
-            return null
+            return undefined
         } else {
-            const func = this.functions.find(func => func.id == funcName)
+            const func = this.functions.find(func => func.name == funcName)
             if (isNull(func)) {
                 throw new Error(`Invalid function name: ${funcName}`)
             }
@@ -117,6 +117,10 @@ export class Contract {
         }
     }
 
+    getMethodIndex(funcName: string): number {
+        return this.functions.findIndex(func => func.name === funcName)
+    }
+
     toTestContract(funcName: string, params: TestContractParams): api.TestContract {
         return {
             group: params.group,
@@ -124,7 +128,7 @@ export class Contract {
             bytecode: this.bytecode,
             initialFields: this.toApiFields(params.initialFields),
             initialAsset: toApiAsset(params.initialAsset),
-            testMethodIndex: params.testMethodIndex,
+            testMethodIndex: this.getMethodIndex(funcName),
             testArgs: this.toApiArgs(funcName, params.testArgs),
             existingContracts: params.existingContracts,
             inputAssets: params.inputAssets
@@ -189,7 +193,7 @@ function toApiToken(token: Token): api.Token {
 
 function toApiAsset(asset?: Asset): api.Asset2 {
     if (isNull(asset)) {
-        return null
+        return undefined
     } else {
         return {
             alphAmount: extractNumber256(asset.alphAmount),
