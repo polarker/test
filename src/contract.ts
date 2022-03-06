@@ -3,7 +3,7 @@ import { promises as fsPromises } from "fs"
 import { CliqueClient } from "alephium-js"
 import * as api from "alephium-js/api/api-alephium"
 
-const isNull = (x): boolean => {
+function isNull(x): boolean {
     return x === null || x === undefined
 }
 
@@ -71,7 +71,10 @@ export class Contract {
         const artifactPath = Contract._artifactPath(fileName)
         const content = await fsPromises.readFile(artifactPath)
         const artifact = JSON.parse(content.toString())
-        return new Contract(fileName, artifact.sourceCodeSha256, artifact.bytecode, artifact.fieldsSignature, artifact.functions, artifact.events)
+        if (isNull(artifact.bytecode) || isNull(artifact.fields) || isNull(artifact.functions) || isNull(artifact.events)) {
+            throw new Event("Compilation did not return the right data")
+        }
+        return new Contract(fileName, artifact.sourceCodeSha256, artifact.bytecode, artifact.fields, artifact.functions, artifact.events)
     }
 
     private _saveToFile(): Promise<void> {
@@ -93,7 +96,7 @@ export class Contract {
             return undefined
         } else {
             if (fields.length === this.fields.types.length) {
-                fields.map((field, index) => toApiVal(field, this.fields.types[index]))
+                return fields.map((field, index) => toApiVal(field, this.fields.types[index]))
             } else {
                 throw new Error(`Invalid number of fields: ${fields}`)
             }

@@ -1,5 +1,9 @@
-TxContract Add() {
+TxContract Add(mut result : U256) {
+    event Add(x: U256, y: U256)
+
     pub fn add(x: U256, y: U256) -> (U256) {
-        return x + y
+        emit Add(x, y)
+        result = x + y
+        return result
     }
 }

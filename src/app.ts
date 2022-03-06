@@ -8,7 +8,7 @@ async function test() {
     const contract = await Contract.from(client, "add.ral")
     console.log(`contract:\n${contract}`)
 
-    const result = await contract.test(client, "add", {testArgs: [1, 2]})
+    const result = await contract.test(client, "add", {initialFields: [0], testArgs: [1, 2]})
     console.log(`test result:`)
     console.log(result)
 }
