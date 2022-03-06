@@ -95,11 +95,7 @@ export class Contract {
         if (isNull(fields)) {
             return undefined
         } else {
-            if (fields.length === this.fields.types.length) {
-                return fields.map((field, index) => toApiVal(field, this.fields.types[index]))
-            } else {
-                throw new Error(`Invalid number of fields: ${fields}`)
-            }
+            return toApiFields(fields, this.fields.types)
         }
     }
 
@@ -133,8 +129,8 @@ export class Contract {
             initialAsset: toApiAsset(params.initialAsset),
             testMethodIndex: this.getMethodIndex(funcName),
             testArgs: this.toApiArgs(funcName, params.testArgs),
-            existingContracts: params.existingContracts,
-            inputAssets: params.inputAssets
+            existingContracts: toApiContractStates(params.existingContracts),
+            inputAssets: toApiInputAssets(params.inputAssets)
         }
     }
 }
@@ -217,13 +213,63 @@ interface InputAsset {
   asset: Asset
 }
 
+interface ContractState {
+  id: string
+  code: string
+  fields: Val[]
+  fieldTypes: string[]
+  asset: Asset
+}
+
+function toApiContractState(state: ContractState): api.ContractState {
+    return {
+        id: state.id,
+        code: state.code,
+        fields: toApiFields(state.fields, state.fieldTypes),
+        asset: toApiAsset(state.asset),
+    }
+}
+
+function toApiContractStates(states?: ContractState[]): api.ContractState[] {
+    if (isNull(states)) {
+        return null
+    } else {
+        return states.map(toApiContractState)
+    }
+}
+
+function toApiFields(fields: Val[], fieldTypes: string[]): api.Val[] {
+    if (fields.length === fieldTypes.length) {
+        return fields.map((field, index) => toApiVal(field, fieldTypes[index]))
+    } else {
+        throw new Error(`Invalid number of fields: ${fields}`)
+    }
+}
+
+interface InputAsset {
+  address: string
+  asset: Asset
+}
+
+function toApiInputAsset(inputAsset: InputAsset): api.InputAsset {
+    return { address: inputAsset.address, asset: toApiAsset(inputAsset.asset) }
+}
+
+function toApiInputAssets(inputAssets?: InputAsset[]): api.InputAsset[] {
+    if (isNull(inputAssets)) {
+        return null
+    } else {
+        return inputAssets.map(toApiInputAsset)
+    }
+}
+
 export interface TestContractParams {
     group?: number; // default 0
-    contractId?: string; // default a bytestring of zeros
+    contractId?: string; // default zero hash
     initialFields?: Val[]; // default no fields
     initialAsset?: Asset; // default 1 ALPH
     testMethodIndex?: number; // default 0
     testArgs?: Val[]; // default no arguments
-    existingContracts?: api.ExistingContract[]; // default no existing contracts
-    inputAssets?: api.InputAsset[]; // default no input asserts
+    existingContracts?: ContractState[]; // default no existing contracts
+    inputAssets?: InputAsset[]; // default no input asserts
 }
