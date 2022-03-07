@@ -41,6 +41,10 @@ export class Contract {
         return `./artifacts/${fileName}.json`
     }
 
+    private static _artifactFolder(): string {
+        return `./artifacts/`
+    }
+
     static async from(client: CliqueClient, fileName: string): Promise<Contract> {
         const contractPath = Contract._contractPath(fileName)
         const contract = await fsPromises.readFile(contractPath)
@@ -89,9 +93,10 @@ export class Contract {
         return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, codeHash: this.codeHash, fields: this.fields, functions: this.functions, events: this.events }, null, 2)
     }
 
-    async test(client: CliqueClient, funcName: string, params: TestContractParams): Promise<api.TestContractResult> {
+    async test(client: CliqueClient, funcName: string, params: TestContractParams): Promise<TestContractResult> {
         const apiParams: api.TestContract = this.toTestContract(funcName, params)
-        return client.contracts.postContractsTestContract(apiParams).then(response => response.data)
+        return client.contracts.postContractsTestContract(apiParams)
+            .then(response => this.fromTestContractResult(response.data))
     }
 
     toApiFields(fields?: Val[]): api.Val[] {
@@ -136,6 +141,40 @@ export class Contract {
             inputAssets: toApiInputAssets(params.inputAssets)
         }
     }
+
+    static async getFieldTypes(codeHash: string): Promise<string[]> {
+        const files = await fsPromises.readdir(Contract._artifactFolder())
+        for (const file of files) {
+            if (file.endsWith(".ral.json")) {
+                const artifact = await Contract.loadContract(file.slice(0, -5))
+                if (artifact.codeHash === codeHash) {
+                    return artifact.fields.types
+                }
+            }
+        }
+
+        throw new Error(`Unkown code with codeHash: ${codeHash}`)
+    }
+
+    async fromApiContractState(state: api.ContractState): Promise<ContractState> {
+        return {
+            id: state.id,
+            code: state.code,
+            codeHash: state.codeHash,
+            fields: state.fields.map(fromApiVal),
+            fieldTypes: await Contract.getFieldTypes(state.codeHash),
+            asset: fromApiAsset(state.asset)
+        }
+    }
+
+    async fromTestContractResult(result: api.TestContractResult): Promise<TestContractResult> {
+        return {
+            returns: result.returns.map(fromApiVal),
+            gasUsed: result.gasUsed,
+            contracts: await Promise.all(result.contracts.map(contract => this.fromApiContractState(contract))),
+            txOutputs: result.txOutputs.map(fromApiOutput)
+        }
+    }
 }
 
 type Number256 = number | bigint
@@ -167,6 +206,10 @@ function extractString(v: Val): string {
     }
 }
 
+function decodeNumber256(n: string): Number256 {
+    return BigInt(n)
+}
+
 function toApiVal(v: Val, tpe: string): api.Val {
     if (tpe === "Bool") {
         return { value: extractBoolean(v), type: tpe }
@@ -179,9 +222,21 @@ function toApiVal(v: Val, tpe: string): api.Val {
     }
 }
 
+function fromApiVal(v: api.Val): Val {
+    if (v.type === "Bool") {
+        return v.value as boolean
+    } else if (v.type === "U256" || v.type === "I256" ) {
+        return decodeNumber256(v.value as string)
+    } else if (v.type === "ByteVec" || v.type === "Address") {
+        return v.value as string
+    } else {
+        throw new Error (`Invalid api.Val type: ${v}`)
+    }
+}
+
 interface Asset {
   alphAmount: Number256
-  tokens: Token[]
+  tokens?: Token[]
 }
 
 interface Token {
@@ -193,6 +248,10 @@ function toApiToken(token: Token): api.Token {
     return { id: token.id, amount: extractNumber256(token.amount) }
 }
 
+function fromApiToken(token: api.Token): Token {
+    return { id: token.id, amount: decodeNumber256(token.amount) }
+}
+
 function toApiAsset(asset?: Asset): api.Asset2 {
     if (isNull(asset)) {
         return undefined
@@ -201,6 +260,13 @@ function toApiAsset(asset?: Asset): api.Asset2 {
             alphAmount: extractNumber256(asset.alphAmount),
             tokens: asset.tokens.map(toApiToken)
         }
+    }
+}
+
+function fromApiAsset(asset: api.Asset2): Asset {
+    return {
+        alphAmount: decodeNumber256(asset.alphAmount),
+        tokens: asset.tokens ? asset.tokens.map(fromApiToken) : undefined
     }
 }
 
@@ -277,4 +343,48 @@ export interface TestContractParams {
     testArgs?: Val[]; // default no arguments
     existingContracts?: ContractState[]; // default no existing contracts
     inputAssets?: InputAsset[]; // default no input asserts
+}
+
+export interface TestContractResult {
+    returns: Val[];
+    gasUsed: number;
+    contracts: ContractState[];
+    txOutputs: Output[];
+}
+export declare type Output = AssetOutput | ContractOutput;
+export interface AssetOutput extends Asset {
+    type: string
+    address: string
+    lockTime: number
+    additionalData: string
+}
+export interface ContractOutput {
+    type: string
+    address: string
+    alphAmount: Number256
+    tokens: Token[]
+}
+
+function fromApiOutput(output: api.Output): Output {
+    if (output.type === "Asset") {
+        const asset = output as api.Asset1
+        return {
+            type: "AssetOutput",
+            address: asset.address,
+            alphAmount: decodeNumber256(asset.amount),
+            tokens: asset.tokens.map(fromApiToken),
+            lockTime: asset.lockTime,
+            additionalData: asset.additionalData
+        }
+    } else if (output.type === "Contract") {
+        const asset = output as api.Contract1
+        return {
+            type: "ContractOutput",
+            address: asset.address,
+            alphAmount: decodeNumber256(asset.amount),
+            tokens: asset.tokens.map(fromApiToken)
+        }
+    } else {
+        throw new Error(`Unknown output type: ${output}`)
+    }
 }

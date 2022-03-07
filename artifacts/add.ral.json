@@ -1,6 +1,7 @@
 {
   "sourceCodeSha256": "eac099eb5426829309d945500c936989cfebb1f36911055ff2c888e19f48bfd9",
   "bytecode": "01011601000202010a05160016015f160016012aa100a00002",
+  "codeHash": "6d75f318090f011b16faeeda2846b7bb94d042ac0c735eb03a947aeed27c4f85",
   "fields": {
     "signature": "TxContract Add(mut result:U256)",
     "types": [
