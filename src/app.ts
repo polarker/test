@@ -13,4 +13,4 @@ async function test() {
     console.log(result)
 }
 
-test().catch(error => console.log(error.error.detail))
+test().catch(error => console.log(error))

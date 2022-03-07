@@ -1,7 +1,7 @@
 import * as crypto from "crypto-js"
 import { promises as fsPromises } from "fs"
 import { CliqueClient } from "alephium-js"
-import * as api from "alephium-js/api/api-alephium"
+import { api } from "alephium-js"
 
 function isNull(x): boolean {
     return x === null || x === undefined
@@ -11,6 +11,7 @@ export class Contract {
     fileName: string
     sourceCodeSha256: string
     bytecode: string
+    codeHash: string
     fields: api.Fields
     functions: api.Function[]
     events: api.Event[]
@@ -18,6 +19,7 @@ export class Contract {
     constructor(fileName: string,
                 sourceCodeSha256: string,
                 bytecode: string,
+                codeHash: string,
                 fields: api.Fields,
                 functions: api.Function[],
                 events: api.Event[]
@@ -25,6 +27,7 @@ export class Contract {
         this.fileName = fileName
         this.sourceCodeSha256 = sourceCodeSha256
         this.bytecode = bytecode
+        this.codeHash = codeHash
         this.fields = fields
         this.functions = functions
         this.events = events
@@ -62,7 +65,7 @@ export class Contract {
         if (isNull(compiled.bytecode) || isNull(compiled.fields) || isNull(compiled.functions) || isNull(compiled.events)) {
             throw new Event("Compilation did not return the right data")
         }
-        const artifact = new Contract(fileName, contractHash, compiled.bytecode, compiled.fields, compiled.functions, compiled.events)
+        const artifact = new Contract(fileName, contractHash, compiled.bytecode, compiled.codeHash, compiled.fields, compiled.functions, compiled.events)
         await artifact._saveToFile()
         return artifact
     }
@@ -74,7 +77,7 @@ export class Contract {
         if (isNull(artifact.bytecode) || isNull(artifact.fields) || isNull(artifact.functions) || isNull(artifact.events)) {
             throw new Event("Compilation did not return the right data")
         }
-        return new Contract(fileName, artifact.sourceCodeSha256, artifact.bytecode, artifact.fields, artifact.functions, artifact.events)
+        return new Contract(fileName, artifact.sourceCodeSha256, artifact.bytecode, artifact.codeHash, artifact.fields, artifact.functions, artifact.events)
     }
 
     private _saveToFile(): Promise<void> {
@@ -83,7 +86,7 @@ export class Contract {
     }
 
     toString(): string {
-        return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, fields: this.fields, functions: this.functions, events: this.events }, null, 2)
+        return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, codeHash: this.codeHash, fields: this.fields, functions: this.functions, events: this.events }, null, 2)
     }
 
     async test(client: CliqueClient, funcName: string, params: TestContractParams): Promise<api.TestContractResult> {
@@ -216,6 +219,7 @@ interface InputAsset {
 interface ContractState {
   id: string
   code: string
+  codeHash: string
   fields: Val[]
   fieldTypes: string[]
   asset: Asset
@@ -225,6 +229,7 @@ function toApiContractState(state: ContractState): api.ContractState {
     return {
         id: state.id,
         code: state.code,
+        codeHash: state.codeHash,
         fields: toApiFields(state.fields, state.fieldTypes),
         asset: toApiAsset(state.asset),
     }
