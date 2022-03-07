@@ -1,0 +1,22 @@
+{
+  "sourceCodeSha256": "5fe3ef4640b2466aca1151f08600a3a6e61db08832c7a49334b9cd2997d002f9",
+  "bytecode": "00010c010002020104160016012a02",
+  "fields": {
+    "signature": "TxContract Add()",
+    "types": []
+  },
+  "functions": [
+    {
+      "name": "add",
+      "signature": "pub add(x:U256,y:U256)->(U256)",
+      "argTypes": [
+        "U256",
+        "U256"
+      ],
+      "returnTypes": [
+        "U256"
+      ]
+    }
+  ],
+  "events": []
+}
