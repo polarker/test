@@ -1,9 +1,11 @@
 {
-  "sourceCodeSha256": "5fe3ef4640b2466aca1151f08600a3a6e61db08832c7a49334b9cd2997d002f9",
-  "bytecode": "00010c010002020104160016012a02",
+  "sourceCodeSha256": "eac099eb5426829309d945500c936989cfebb1f36911055ff2c888e19f48bfd9",
+  "bytecode": "01011601000202010a05160016015f160016012aa100a00002",
   "fields": {
-    "signature": "TxContract Add()",
-    "types": []
+    "signature": "TxContract Add(mut result:U256)",
+    "types": [
+      "U256"
+    ]
   },
   "functions": [
     {
@@ -18,5 +20,14 @@
       ]
     }
   ],
-  "events": []
+  "events": [
+    {
+      "name": "Add",
+      "signature": "event Add(x:U256,y:U256)",
+      "fieldTypes": [
+        "U256",
+        "U256"
+      ]
+    }
+  ]
 }

@@ -232,7 +232,7 @@ function toApiContractState(state: ContractState): api.ContractState {
 
 function toApiContractStates(states?: ContractState[]): api.ContractState[] {
     if (isNull(states)) {
-        return null
+        return undefined
     } else {
         return states.map(toApiContractState)
     }
@@ -257,7 +257,7 @@ function toApiInputAsset(inputAsset: InputAsset): api.InputAsset {
 
 function toApiInputAssets(inputAssets?: InputAsset[]): api.InputAsset[] {
     if (isNull(inputAssets)) {
-        return null
+        return undefined
     } else {
         return inputAssets.map(toApiInputAsset)
     }
