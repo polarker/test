@@ -21,8 +21,8 @@ export class Contract {
     // cache address for contracts
     private _contractAddresses: Map<string, string>
 
-    static importRegex: RegExp = /import "[a-z][a-z_0-9]*.ral"/
-    static contractRegex: RegExp = /TxContract [A-Z][a-zA-Z0-9]*\(/
+    static importRegex: RegExp = new RegExp('^import "[a-z][a-z_0-9]*.ral"', 'm')
+    static contractRegex: RegExp = new RegExp('^TxContract [A-Z][a-zA-Z0-9]*\\(', 'm')
 
     constructor(fileName: string,
                 sourceCodeSha256: string,
@@ -72,7 +72,16 @@ export class Contract {
     static async loadContractStr(fileName: string, importsCache: string[]): Promise<string> {
         const contractPath = Contract._contractPath(fileName)
         const contractBuffer = await fsPromises.readFile(contractPath)
-        return Contract.handleImports(contractBuffer.toString(), importsCache)
+        const contractStr = contractBuffer.toString()
+        console.log(contractStr)
+        const contractMatches = this.contractRegex.exec(contractStr)
+        if (isNull(contractMatches)) {
+            throw new Error(`No contract found in: ${fileName}`)
+        } else if (contractMatches.length > 1) {
+            throw new Error(`Multiple contracts in: ${fileName}`)
+        } else {
+            return Contract.handleImports(contractStr, importsCache)
+        }
     }
 
     static async from(client: CliqueClient, fileName: string): Promise<Contract> {
