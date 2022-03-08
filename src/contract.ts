@@ -1,4 +1,6 @@
-import * as crypto from "crypto-js"
+import * as cryptojs from "crypto-js"
+import * as crypto from "crypto"
+import * as bs58 from "bs58"
 import { promises as fsPromises } from "fs"
 import { CliqueClient } from "alephium-js"
 import { api } from "alephium-js"
@@ -16,6 +18,9 @@ export class Contract {
     functions: api.Function[]
     events: api.Event[]
 
+    // cache address for contracts
+    private _contractAddresses: Map<string, string>
+
     constructor(fileName: string,
                 sourceCodeSha256: string,
                 bytecode: string,
@@ -31,6 +36,8 @@ export class Contract {
         this.fields = fields
         this.functions = functions
         this.events = events
+
+        this._contractAddresses = new Map<string, string>()
     }
 
     private static _contractPath(fileName: string): string {
@@ -49,7 +56,7 @@ export class Contract {
         const contractPath = Contract._contractPath(fileName)
         const contract = await fsPromises.readFile(contractPath)
         const contractStr = contract.toString()
-        const contractHash = crypto.SHA256(contractStr).toString()
+        const contractHash = cryptojs.SHA256(contractStr).toString()
 
         try {
             const existingContract = await this.loadContract(fileName)
@@ -93,10 +100,24 @@ export class Contract {
         return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, codeHash: this.codeHash, fields: this.fields, functions: this.functions, events: this.events }, null, 2)
     }
 
+    private randomAddress(fileName: string): string {
+        const bytes = crypto.randomBytes(33)
+        bytes[0] = 3
+        const address = bs58.encode(bytes)
+        this._contractAddresses.set(address, fileName)
+        return address
+    }
+
     async test(client: CliqueClient, funcName: string, params: TestContractParams): Promise<TestContractResult> {
+        this._contractAddresses.clear()
         const apiParams: api.TestContract = this.toTestContract(funcName, params)
-        return client.contracts.postContractsTestContract(apiParams)
-            .then(response => this.fromTestContractResult(response.data))
+        console.log(apiParams)
+        const response = await client.contracts.postContractsTestContract(apiParams)
+        console.log(response.data)
+        const result = this.fromTestContractResult(response.data)
+        console.log(await result)
+        this._contractAddresses.clear()
+        return result
     }
 
     toApiFields(fields?: Val[]): api.Val[] {
@@ -128,27 +149,42 @@ export class Contract {
         return this.functions.findIndex(func => func.name === funcName)
     }
 
+    toApiContractState(state: ContractState): api.ContractState {
+        const address = this.randomAddress(state.fileName)
+        this._contractAddresses.set(address, state.fileName)
+        return toApiContractState(state, address)
+    }
+
+    toApiContractStates(states?: ContractState[]): api.ContractState[] {
+        if (isNull(states)) {
+            return undefined
+        } else {
+            return states.map(this.toApiContractState)
+        }
+    }
+
     toTestContract(funcName: string, params: TestContractParams): api.TestContract {
         return {
             group: params.group,
-            contractId: params.contractId,
+            address: this.randomAddress(this.fileName),
             bytecode: this.bytecode,
             initialFields: this.toApiFields(params.initialFields),
             initialAsset: toApiAsset(params.initialAsset),
             testMethodIndex: this.getMethodIndex(funcName),
             testArgs: this.toApiArgs(funcName, params.testArgs),
-            existingContracts: toApiContractStates(params.existingContracts),
+            existingContracts: this.toApiContractStates(params.existingContracts),
             inputAssets: toApiInputAssets(params.inputAssets)
         }
     }
 
-    static async getFieldTypes(codeHash: string): Promise<string[]> {
+    static async getContract(codeHash: string): Promise<Contract> {
         const files = await fsPromises.readdir(Contract._artifactFolder())
         for (const file of files) {
             if (file.endsWith(".ral.json")) {
-                const artifact = await Contract.loadContract(file.slice(0, -5))
-                if (artifact.codeHash === codeHash) {
-                    return artifact.fields.types
+                const fileName = file.slice(0, -5)
+                const contract = await Contract.loadContract(fileName)
+                if (contract.codeHash === codeHash) {
+                    return contract
                 }
             }
         }
@@ -156,9 +192,14 @@ export class Contract {
         throw new Error(`Unkown code with codeHash: ${codeHash}`)
     }
 
+    static async getFieldTypes(codeHash: string): Promise<string[]> {
+        return Contract.getContract(codeHash).then(contract => contract.fields.types)
+    }
+
     async fromApiContractState(state: api.ContractState): Promise<ContractState> {
+        const contract = await Contract.getContract(state.codeHash)
         return {
-            id: state.id,
+            fileName: contract.fileName,
             code: state.code,
             codeHash: state.codeHash,
             fields: state.fields.map(fromApiVal),
@@ -283,7 +324,7 @@ interface InputAsset {
 }
 
 interface ContractState {
-  id: string
+  fileName: string
   code: string
   codeHash: string
   fields: Val[]
@@ -291,21 +332,13 @@ interface ContractState {
   asset: Asset
 }
 
-function toApiContractState(state: ContractState): api.ContractState {
+function toApiContractState(state: ContractState, address: string): api.ContractState {
     return {
-        id: state.id,
+        address: address,
         code: state.code,
         codeHash: state.codeHash,
         fields: toApiFields(state.fields, state.fieldTypes),
         asset: toApiAsset(state.asset),
-    }
-}
-
-function toApiContractStates(states?: ContractState[]): api.ContractState[] {
-    if (isNull(states)) {
-        return undefined
-    } else {
-        return states.map(toApiContractState)
     }
 }
 
@@ -336,7 +369,6 @@ function toApiInputAssets(inputAssets?: InputAsset[]): api.InputAsset[] {
 
 export interface TestContractParams {
     group?: number; // default 0
-    contractId?: string; // default zero hash
     initialFields?: Val[]; // default no fields
     initialAsset?: Asset; // default 1 ALPH
     testMethodIndex?: number; // default 0
