@@ -73,7 +73,6 @@ export class Contract {
         const contractPath = Contract._contractPath(fileName)
         const contractBuffer = await fsPromises.readFile(contractPath)
         const contractStr = contractBuffer.toString()
-        console.log(contractStr)
         const contractMatches = this.contractRegex.exec(contractStr)
         if (isNull(contractMatches)) {
             throw new Error(`No contract found in: ${fileName}`)
@@ -86,7 +85,6 @@ export class Contract {
 
     static async from(client: CliqueClient, fileName: string): Promise<Contract> {
         const contractStr = await Contract.loadContractStr(fileName, [])
-        console.log(contractStr)
         const contractHash = cryptojs.SHA256(contractStr).toString()
         try {
             const existingContract = await this.loadContract(fileName)
@@ -157,11 +155,11 @@ export class Contract {
     async test(client: CliqueClient, funcName: string, params: TestContractParams): Promise<TestContractResult> {
         this._contractAddresses.clear()
         const apiParams: api.TestContract = this.toTestContract(funcName, params)
-        console.log(apiParams)
+        // console.log(JSON.stringify(apiParams, null, 2))
         const response = await client.contracts.postContractsTestContract(apiParams)
-        console.log(response.data)
+        // console.log(JSON.stringify(response.data, null, 2))
         const result = this.fromTestContractResult(response.data)
-        console.log(await result)
+        // console.log(JSON.stringify(await result, null, 2))
         this._contractAddresses.clear()
         return result
     }
@@ -197,7 +195,6 @@ export class Contract {
 
     toApiContractState = (state: ContractState): api.ContractState => {
         if (isNull(state.address)) {
-            console.log(this)
             const address = this.randomAddressWithCache(state.fileName)
             return toApiContractState(state, address)
         } else {
@@ -210,8 +207,6 @@ export class Contract {
         if (isNull(states)) {
             return undefined
         } else {
-            console.log(this)
-            console.log(states)
             return states.map(this.toApiContractState)
         }
     }
