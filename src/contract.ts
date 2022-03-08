@@ -4,6 +4,7 @@ import * as bs58 from "bs58"
 import { promises as fsPromises } from "fs"
 import { CliqueClient } from "alephium-js"
 import { api } from "alephium-js"
+import { Signer } from "./signer"
 
 function isNull(x): boolean {
     return x === null || x === undefined
@@ -267,6 +268,16 @@ export class Contract {
             txOutputs: result.txOutputs.map(fromApiOutput)
         }
     }
+
+    async transactionForDeployment(signer: Signer, initialFields?: Val[]): Promise<DeployContractTransaction> {
+        const params: api.BuildContract = {
+            fromPublicKey: await signer.getPublicKey(),
+            bytecode: this.bytecode,
+            initialFields: this.toApiFields(initialFields)
+        }
+        const response = await signer.client.contracts.postContractsUnsignedTxBuildContract(params)
+        return fromApiDeployContractUnsignedTx(response.data)
+    }
 }
 
 type Number256 = number | bigint
@@ -500,4 +511,15 @@ function fromApiOutput(output: api.Output): Output {
     } else {
         throw new Error(`Unknown output type: ${output}`)
     }
+}
+
+export interface DeployContractTransaction {
+    group: number;
+    unsignedTx: string;
+    hash: string;
+    contractAddress: string;
+}
+
+function fromApiDeployContractUnsignedTx(result: api.BuildContractResult): DeployContractTransaction {
+    return result
 }
