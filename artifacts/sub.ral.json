@@ -1,0 +1,34 @@
+{
+  "sourceCodeSha256": "ab201c43d3cb534a5ae9ed0e8dbbf6d2eaeacf672d51d8ef3859eec71b3966d3",
+  "bytecode": "01011601000202010a05160016015f160016012ba100a00002",
+  "codeHash": "c9b97e60dc998e5ba21a503d6469ee107b05a1f755571561f6ad7712116e605f",
+  "fields": {
+    "signature": "TxContract Sub(mut result:U256)",
+    "types": [
+      "U256"
+    ]
+  },
+  "functions": [
+    {
+      "name": "sub",
+      "signature": "pub sub(x:U256,y:U256)->(U256)",
+      "argTypes": [
+        "U256",
+        "U256"
+      ],
+      "returnTypes": [
+        "U256"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "Sub",
+      "signature": "event Sub(x:U256,y:U256)",
+      "fieldTypes": [
+        "U256",
+        "U256"
+      ]
+    }
+  ]
+}

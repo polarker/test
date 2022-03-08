@@ -21,6 +21,9 @@ export class Contract {
     // cache address for contracts
     private _contractAddresses: Map<string, string>
 
+    static importRegex: RegExp = /import "[a-z][a-z_0-9]*.ral"/
+    static contractRegex: RegExp = /TxContract [A-Z][a-zA-Z0-9]*\(/
+
     constructor(fileName: string,
                 sourceCodeSha256: string,
                 bytecode: string,
@@ -52,12 +55,30 @@ export class Contract {
         return `./artifacts/`
     }
 
-    static async from(client: CliqueClient, fileName: string): Promise<Contract> {
-        const contractPath = Contract._contractPath(fileName)
-        const contract = await fsPromises.readFile(contractPath)
-        const contractStr = contract.toString()
-        const contractHash = cryptojs.SHA256(contractStr).toString()
+    static async handleImports(contractStr: string, importsCache: string[]): Promise<string> {
+        const localImportsCache: string[] = []
+        var result = contractStr.replace(Contract.importRegex, (match) => { localImportsCache.push(match); return ""})
+        for (const myImport of localImportsCache) {
+            const fileName = myImport.slice(8, -1)
+            if (!importsCache.includes(fileName)) {
+                importsCache.push(fileName)
+                const importContractStr = await Contract.loadContractStr(fileName, importsCache)
+                result = result.concat("\n", importContractStr)
+            }
+        }
+        return result
+    }
 
+    static async loadContractStr(fileName: string, importsCache: string[]): Promise<string> {
+        const contractPath = Contract._contractPath(fileName)
+        const contractBuffer = await fsPromises.readFile(contractPath)
+        return Contract.handleImports(contractBuffer.toString(), importsCache)
+    }
+
+    static async from(client: CliqueClient, fileName: string): Promise<Contract> {
+        const contractStr = await Contract.loadContractStr(fileName, [])
+        console.log(contractStr)
+        const contractHash = cryptojs.SHA256(contractStr).toString()
         try {
             const existingContract = await this.loadContract(fileName)
             if (existingContract.sourceCodeSha256 === contractHash) {
@@ -100,10 +121,26 @@ export class Contract {
         return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, codeHash: this.codeHash, fields: this.fields, functions: this.functions, events: this.events }, null, 2)
     }
 
-    private randomAddress(fileName: string): string {
+    toState(fields: Val[], asset: Asset, address?: string): ContractState {
+        return {
+            fileName: this.fileName,
+            address: address,
+            bytecode: this.bytecode,
+            codeHash: this.codeHash,
+            fields: fields,
+            fieldTypes: this.fields.types,
+            asset: asset
+        }
+    }
+
+    static randomAddress(): string {
         const bytes = crypto.randomBytes(33)
         bytes[0] = 3
-        const address = bs58.encode(bytes)
+        return bs58.encode(bytes)
+    }
+
+    private randomAddressWithCache(fileName: string): string {
+        const address = Contract.randomAddress()
         this._contractAddresses.set(address, fileName)
         return address
     }
@@ -149,24 +186,34 @@ export class Contract {
         return this.functions.findIndex(func => func.name === funcName)
     }
 
-    toApiContractState(state: ContractState): api.ContractState {
-        const address = this.randomAddress(state.fileName)
-        this._contractAddresses.set(address, state.fileName)
-        return toApiContractState(state, address)
+    toApiContractState = (state: ContractState): api.ContractState => {
+        if (isNull(state.address)) {
+            console.log(this)
+            const address = this.randomAddressWithCache(state.fileName)
+            return toApiContractState(state, address)
+        } else {
+            this._contractAddresses.set(state.address, state.fileName)
+            return toApiContractState(state, state.address)
+        }
     }
 
     toApiContractStates(states?: ContractState[]): api.ContractState[] {
         if (isNull(states)) {
             return undefined
         } else {
+            console.log(this)
+            console.log(states)
             return states.map(this.toApiContractState)
         }
     }
 
     toTestContract(funcName: string, params: TestContractParams): api.TestContract {
+        const address: string = params.address ?
+          this.randomAddressWithCache(this.fileName) :
+          (this._contractAddresses.set(params.address, this.fileName), params.address)
         return {
             group: params.group,
-            address: this.randomAddress(this.fileName),
+            address: address,
             bytecode: this.bytecode,
             initialFields: this.toApiFields(params.initialFields),
             initialAsset: toApiAsset(params.initialAsset),
@@ -200,7 +247,7 @@ export class Contract {
         const contract = await Contract.getContract(state.codeHash)
         return {
             fileName: contract.fileName,
-            code: state.code,
+            bytecode: state.bytecode,
             codeHash: state.codeHash,
             fields: state.fields.map(fromApiVal),
             fieldTypes: await Contract.getFieldTypes(state.codeHash),
@@ -233,22 +280,48 @@ function extractBoolean(v: Val): boolean {
 function extractNumber256(v: Val): string {
     if ((typeof v === "number" && Number.isInteger(v)) || typeof v === "bigint") {
         return v.toString()
+    } else if (typeof v === "string") {
+        return v
     } else {
         throw new Error(`Invalid 256 bit number: ${v}`)
     }
 }
 
-// TODO: check the format of hex string and base58 string
-function extractString(v: Val): string {
+// TODO: check hex string
+function extractByteVec(v: Val): string {
     if (typeof v === "string") {
-        return v
+        // try to convert from address to contract id
+        try {
+            const address = bs58.decode(v)
+            if (address.length == 33 && address[0] == 3) {
+                return Buffer.from(address.slice(1)).toString('hex')
+            }
+        } catch(_) {}
+        return v as string
+    } else {
+        throw new Error(`Invalid string: ${v}`)
+    }
+}
+
+function extractBs58(v: Val): string {
+    if (typeof v === "string") {
+        try {
+            bs58.decode(v)
+            return v as string
+        } catch(error) {
+            throw new Error(`Invalid base58 string: ${v}`)
+        }
     } else {
         throw new Error(`Invalid string: ${v}`)
     }
 }
 
 function decodeNumber256(n: string): Number256 {
-    return BigInt(n)
+    if (Number.isSafeInteger(Number.parseInt(n))) {
+        return Number(n)
+    } else {
+        return BigInt(n)
+    }
 }
 
 function toApiVal(v: Val, tpe: string): api.Val {
@@ -256,8 +329,10 @@ function toApiVal(v: Val, tpe: string): api.Val {
         return { value: extractBoolean(v), type: tpe }
     } else if (tpe === "U256" || tpe === "I256") {
         return { value: extractNumber256(v), type: tpe }
-    } else if (tpe === "ByteVec" || tpe === "Address") {
-        return { value: extractString(v), type: tpe }
+    } else if (tpe === "ByteVec") {
+        return { value: extractByteVec(v), type: tpe }
+    } else if (tpe === "Address") {
+        return { value: extractBs58(v), type: tpe }
     } else {
         throw new Error(`Invalid Val type: ${tpe}`)
     }
@@ -299,7 +374,7 @@ function toApiAsset(asset?: Asset): api.Asset2 {
     } else {
         return {
             alphAmount: extractNumber256(asset.alphAmount),
-            tokens: asset.tokens.map(toApiToken)
+            tokens: isNull(asset.tokens) ? undefined : asset.tokens.map(toApiToken)
         }
     }
 }
@@ -323,9 +398,10 @@ interface InputAsset {
   asset: Asset
 }
 
-interface ContractState {
+export interface ContractState {
   fileName: string
-  code: string
+  address?: string
+  bytecode: string
   codeHash: string
   fields: Val[]
   fieldTypes: string[]
@@ -335,7 +411,7 @@ interface ContractState {
 function toApiContractState(state: ContractState, address: string): api.ContractState {
     return {
         address: address,
-        code: state.code,
+        bytecode: state.bytecode,
         codeHash: state.codeHash,
         fields: toApiFields(state.fields, state.fieldTypes),
         asset: toApiAsset(state.asset),
@@ -369,6 +445,7 @@ function toApiInputAssets(inputAssets?: InputAsset[]): api.InputAsset[] {
 
 export interface TestContractParams {
     group?: number; // default 0
+    address?: string;
     initialFields?: Val[]; // default no fields
     initialAsset?: Asset; // default 1 ALPH
     testMethodIndex?: number; // default 0

@@ -1,7 +1,7 @@
 {
-  "sourceCodeSha256": "eac099eb5426829309d945500c936989cfebb1f36911055ff2c888e19f48bfd9",
-  "bytecode": "01011601000202010a05160016015f160016012aa100a00002",
-  "codeHash": "6d75f318090f011b16faeeda2846b7bb94d042ac0c735eb03a947aeed27c4f85",
+  "sourceCodeSha256": "a5fc264c8a841f15747431ffca4b946a05e96fa6f194f38b99333cf8b3a2808c",
+  "bytecode": "0101402201000304021005160116025f16001703160116022aa100a000160116021603010002",
+  "codeHash": "9e7a0e90c9f3594491e579f2d0d226deb164024e313cadc451cfff4215e731fa",
   "fields": {
     "signature": "TxContract Add(mut result:U256)",
     "types": [
@@ -11,12 +11,14 @@
   "functions": [
     {
       "name": "add",
-      "signature": "pub add(x:U256,y:U256)->(U256)",
+      "signature": "pub add(subAddress:ByteVec,x:U256,y:U256)->(U256,U256)",
       "argTypes": [
+        "ByteVec",
         "U256",
         "U256"
       ],
       "returnTypes": [
+        "U256",
         "U256"
       ]
     }
