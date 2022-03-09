@@ -84,7 +84,15 @@ export class Contract {
         }
     }
 
+    static checkFileNameExtension(fileName: string): void {
+        if (!fileName.endsWith('.ral')) {
+            throw new Error('Smart contract file name should end with ".ral"')
+        }
+    }
+
     static async from(client: CliqueClient, fileName: string): Promise<Contract> {
+        Contract.checkFileNameExtension(fileName)
+
         const contractStr = await Contract.loadContractStr(fileName, [])
         const contractHash = cryptojs.SHA256(contractStr).toString()
         try {
@@ -147,7 +155,7 @@ export class Contract {
         return bs58.encode(bytes)
     }
 
-    private randomAddressWithCache(fileName: string): string {
+    private _randomAddressWithCache(fileName: string): string {
         const address = Contract.randomAddress()
         this._contractAddresses.set(address, fileName)
         return address
@@ -196,7 +204,7 @@ export class Contract {
 
     toApiContractState = (state: ContractState): api.ContractState => {
         if (isNull(state.address)) {
-            const address = this.randomAddressWithCache(state.fileName)
+            const address = this._randomAddressWithCache(state.fileName)
             return toApiContractState(state, address)
         } else {
             this._contractAddresses.set(state.address, state.fileName)
@@ -214,7 +222,7 @@ export class Contract {
 
     toTestContract(funcName: string, params: TestContractParams): api.TestContract {
         const address: string = params.address ?
-          this.randomAddressWithCache(this.fileName) :
+          this._randomAddressWithCache(this.fileName) :
           (this._contractAddresses.set(params.address, this.fileName), params.address)
         return {
             group: params.group,
