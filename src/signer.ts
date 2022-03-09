@@ -38,9 +38,9 @@ export class Signer {
 }
 
 export interface SubmissionResult {
-    txId: string;
-    fromGroup: number;
-    toGroup: number;
+    txId: string
+    fromGroup: number
+    toGroup: number
 }
 
 function fromApiSubmissionResult(result: api.TxResult): SubmissionResult {

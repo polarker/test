@@ -502,13 +502,13 @@ function fromApiVal(v: api.Val): Val {
 }
 
 interface Asset {
-  alphAmount: Number256
-  tokens?: Token[]
+    alphAmount: Number256
+    tokens?: Token[]
 }
 
 interface Token {
-  id: string
-  amount: Number256
+    id: string
+    amount: Number256
 }
 
 function toApiToken(token: Token): api.Token {
@@ -537,16 +537,9 @@ function fromApiAsset(asset: api.Asset2): Asset {
     }
 }
 
-interface ExistingContract {
-  id: string
-  code: string
-  fields: Val[]
-  asset: Asset
-}
-
 interface InputAsset {
-  address: string
-  asset: Asset
+    address: string
+    asset: Asset
 }
 
 export interface ContractState {
@@ -578,8 +571,8 @@ function toApiFields(fields: Val[], fieldTypes: string[]): api.Val[] {
 }
 
 interface InputAsset {
-  address: string
-  asset: Asset
+    address: string
+    asset: Asset
 }
 
 function toApiInputAsset(inputAsset: InputAsset): api.InputAsset {
@@ -595,23 +588,23 @@ function toApiInputAssets(inputAssets?: InputAsset[]): api.InputAsset[] {
 }
 
 export interface TestContractParams {
-    group?: number; // default 0
-    address?: string;
-    initialFields?: Val[]; // default no fields
-    initialAsset?: Asset; // default 1 ALPH
-    testMethodIndex?: number; // default 0
-    testArgs?: Val[]; // default no arguments
-    existingContracts?: ContractState[]; // default no existing contracts
-    inputAssets?: InputAsset[]; // default no input asserts
+    group?: number // default 0
+    address?: string
+    initialFields?: Val[] // default no fields
+    initialAsset?: Asset // default 1 ALPH
+    testMethodIndex?: number // default 0
+    testArgs?: Val[] // default no arguments
+    existingContracts?: ContractState[] // default no existing contracts
+    inputAssets?: InputAsset[] // default no input asserts
 }
 
 export interface TestContractResult {
-    returns: Val[];
-    gasUsed: number;
-    contracts: ContractState[];
-    txOutputs: Output[];
+    returns: Val[]
+    gasUsed: number
+    contracts: ContractState[]
+    txOutputs: Output[]
 }
-export declare type Output = AssetOutput | ContractOutput;
+export declare type Output = AssetOutput | ContractOutput
 export interface AssetOutput extends Asset {
     type: string
     address: string
@@ -650,10 +643,10 @@ function fromApiOutput(output: api.Output): Output {
 }
 
 export interface DeployContractTransaction {
-    group: number;
-    unsignedTx: string;
-    hash: string;
-    contractAddress: string;
+    group: number
+    unsignedTx: string
+    hash: string
+    contractAddress: string
 }
 
 function fromApiDeployContractUnsignedTx(result: api.BuildContractResult): DeployContractTransaction {
@@ -661,15 +654,15 @@ function fromApiDeployContractUnsignedTx(result: api.BuildContractResult): Deplo
 }
 
 export interface BuildScriptTx {
-    amount?: Number256;
-    gas?: number;
-    gasPrice?: Number256;
-    utxosLimit?: number;
+    amount?: Number256
+    gas?: number
+    gasPrice?: Number256
+    utxosLimit?: number
 }
 
 export interface BuildScriptTxResult {
-    unsignedTx: string;
-    hash: string;
-    fromGroup: number;
-    toGroup: number;
+    unsignedTx: string
+    hash: string
+    fromGroup: number
+    toGroup: number
 }

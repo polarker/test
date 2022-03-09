@@ -3,8 +3,8 @@ import { Contract, TestContractParams, Script } from "./contract"
 import { Signer } from "./signer"
 
 (BigInt.prototype as any).toJSON = function () {
-    return this.toString();
-};
+    return this.toString()
+}
 
 async function test() {
     const client = new CliqueClient({baseUrl: "http://127.0.0.1:12973"})
