@@ -3,7 +3,7 @@ TxContract Sub(mut result : U256) {
 
     pub fn sub(x: U256, y: U256) -> (U256) {
         emit Sub(x, y)
-        result = x - y
+        result = result + x - y
         return result
     }
 }

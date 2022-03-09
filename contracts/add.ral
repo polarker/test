@@ -6,7 +6,7 @@ TxContract Add(mut result : U256) {
     pub fn add(subAddress: ByteVec, x: U256, y: U256) -> (U256, U256) {
         emit Add(x, y)
         let sub = Sub(subAddress)
-        result = x + y
+        result = result + x + y
         return result, sub.sub(x, y)
     }
 }

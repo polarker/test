@@ -1,5 +1,5 @@
 import { CliqueClient } from "alephium-js"
-import { Contract, TestContractParams } from "./contract"
+import { Contract, TestContractParams, Script } from "./contract"
 import { Signer } from "./signer"
 
 (BigInt.prototype as any).toJSON = function () {
@@ -16,11 +16,11 @@ async function test() {
     const sub = await Contract.from(client, "sub.ral")
     console.log(`sub: \n${sub}`)
 
-    const subAddress = Contract.randomAddress()
-    const subState = sub.toState([0], { alphAmount: 1000000000000000000n }, subAddress)
+    const subTestAddress = Contract.randomAddress()
+    const subState = sub.toState([0], { alphAmount: 1000000000000000000n }, subTestAddress)
     const testParams: TestContractParams = {
         initialFields: [0],
-        testArgs: [subAddress, 2, 1],
+        testArgs: [subTestAddress, 2, 1],
         existingContracts: [subState]
     }
     const testResult = await add.test(client, "add", testParams)
@@ -28,13 +28,32 @@ async function test() {
     console.log(JSON.stringify(testResult, null, 2))
 
     const signer = new Signer(client, "sdk", "1Fy87bs7v1WbaRhccyADDnyG8X9w7duhUBFjGxdvdnYMN")
-    const deployTx = await add.transactionForDeployment(signer, [0])
-    console.log("unsigned tx result:")
-    console.log(JSON.stringify(deployTx, null, 2))
 
-    const submitResult = await signer.submitTransaction(deployTx.unsignedTx, deployTx.hash)
-    console.log("submission result:")
-    console.log(JSON.stringify(submitResult, null, 2))
+    const subDeployTx = await sub.transactionForDeployment(signer, [0])
+    console.log("sub tx result:")
+    console.log(JSON.stringify(subDeployTx, null, 2))
+    const subSubmitResult = await signer.submitTransaction(subDeployTx.unsignedTx, subDeployTx.hash)
+    console.log("sub submission result:")
+    console.log(JSON.stringify(subSubmitResult, null, 2))
+
+    const addDeployTx = await add.transactionForDeployment(signer, [0])
+    console.log("add tx result:")
+    console.log(JSON.stringify(addDeployTx, null, 2))
+    const addSubmitResult = await signer.submitTransaction(addDeployTx.unsignedTx, addDeployTx.hash)
+    console.log("add submission result:")
+    console.log(JSON.stringify(addSubmitResult, null, 2))
+
+    const subAddress = subDeployTx.contractAddress
+    const addAddress = addDeployTx.contractAddress
+    const main = await Script.from(client, "main.ral", { addAddress: addAddress, subAddress: subAddress })
+    console.log(`main:\n${main}`)
+
+    const mainScriptTx = await main.transactionForDeployment(signer)
+    console.log("main tx result:")
+    console.log(JSON.stringify(mainScriptTx, null, 2))
+    const mainSubmitResult = await signer.submitTransaction(mainScriptTx.unsignedTx, mainScriptTx.hash)
+    console.log("main submission result:")
+    console.log(JSON.stringify(mainSubmitResult, null, 2))
 }
 
 test().catch(error => console.log(error))

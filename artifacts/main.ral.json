@@ -1,0 +1,13 @@
+{
+  "sourceCodeSha256": "1e12ef33729d6f837c2796b7516ca8187bee9b139306e12163a9721230d1e714",
+  "bytecode": "01010100010009144020dcab56c0bea3ab310a1952baad80384728f1df6d9f3bf89b51e8b95f5a092a1f170014402056839853448a675b0eb81ab41a33d9fcd63eaac3552a4904298cff9b6094ee690e0d160001001818",
+  "codeHash": "7c5ba18ae59954c63c8cb950517897909350bf217e6c58791979fdf921a3252c",
+  "functions": [
+    {
+      "name": "main",
+      "signature": "pub payable main()->()",
+      "argTypes": [],
+      "returnTypes": []
+    }
+  ]
+}

@@ -1,6 +1,5 @@
 import { CliqueClient } from "alephium-js"
 import { api } from "alephium-js"
-import { Contract, ContractState } from "./contract"
 
 export class Signer {
     client: CliqueClient

@@ -10,7 +10,122 @@ function isNull(x): boolean {
     return x === null || x === undefined
 }
 
-export class Contract {
+abstract class Common {
+    fileName: string
+    sourceCodeSha256: string
+    bytecode: string
+    codeHash: string
+    functions: api.Function[]
+
+    static importRegex: RegExp = new RegExp('^import "[a-z][a-z_0-9]*.ral"', 'm')
+    static contractRegex: RegExp = new RegExp('^TxContract [A-Z][a-zA-Z0-9]*\\(', 'm')
+    static scriptRegex: RegExp = new RegExp('^TxScript [A-Z][a-zA-Z0-9]* \\\{', 'm')
+    static variableRegex: RegExp = new RegExp('\\\{\\\{\\s+[a-z][a-zA-Z0-9]*\\s+\\\}\\\}', 'g')
+
+    constructor(fileName: string,
+                sourceCodeSha256: string,
+                bytecode: string,
+                codeHash: string,
+                functions: api.Function[]
+    ) {
+        this.fileName = fileName
+        this.sourceCodeSha256 = sourceCodeSha256
+        this.bytecode = bytecode
+        this.codeHash = codeHash
+        this.functions = functions
+    }
+
+    protected static _contractPath(fileName: string): string {
+        return `./contracts/${fileName}`
+    }
+
+    protected static _artifactPath(fileName: string): string {
+        return `./artifacts/${fileName}.json`
+    }
+
+    protected static _artifactFolder(): string {
+        return `./artifacts/`
+    }
+
+    static async handleImports(contractStr: string, importsCache: string[], validate: (string) => void): Promise<string> {
+        const localImportsCache: string[] = []
+        var result = contractStr.replace(Common.importRegex, (match) => { localImportsCache.push(match); return "" })
+        for (const myImport of localImportsCache) {
+            const fileName = myImport.slice(8, -1)
+            if (!importsCache.includes(fileName)) {
+                importsCache.push(fileName)
+                const importContractStr = await Common._loadContractStr(fileName, importsCache, code => Contract.checkCodeType(fileName, code))
+                result = result.concat("\n", importContractStr)
+            }
+        }
+        return result
+    }
+
+    protected static _replaceVariables(contractStr: string, variables?: any): string {
+        if (isNull(variables)) {
+            return contractStr
+        } else {
+            return contractStr.replace(Common.variableRegex, (match) => {
+                const variableName = match.split(/(\s+)/)[2]
+                if (variableName in variables) {
+                    return variables[variableName].toString()
+                } else {
+                    throw new Error(`The value of variable ${variableName} is not provided`)
+                }
+            })
+        }
+    }
+
+    protected static async _loadContractStr(fileName: string, importsCache: string[], validate: (string) => void): Promise<string> {
+        const contractPath = this._contractPath(fileName)
+        const contractBuffer = await fsPromises.readFile(contractPath)
+        const contractStr = contractBuffer.toString()
+
+        validate(contractStr)
+        return Common.handleImports(contractStr, importsCache, validate)
+    }
+
+    static checkFileNameExtension(fileName: string): void {
+        if (!fileName.endsWith('.ral')) {
+            throw new Error('Smart contract file name should end with ".ral"')
+        }
+    }
+
+    protected static async _from<T extends { sourceCodeSha256: string }>(
+        client: CliqueClient,
+        fileName: string,
+        loadContractStr: (fileName: string, importsCache: string[]) => Promise<string>,
+        loadContract: (fileName: string) => Promise<T>,
+        __from: (client: CliqueClient, fileName: string, contractStr: string, contractHash: string) => Promise<T>
+    ): Promise<T> {
+        Common.checkFileNameExtension(fileName)
+
+        const contractStr = await loadContractStr(fileName, [])
+        const contractHash = cryptojs.SHA256(contractStr).toString()
+        try {
+            const existingContract = await loadContract(fileName)
+            if (existingContract.sourceCodeSha256 === contractHash) {
+                console.log("the code is already compiled")
+                return existingContract
+            } else {
+                return __from(client, fileName, contractStr, contractHash)
+            }
+        } catch(_) {
+            return __from(client, fileName, contractStr, contractHash)
+        }
+    }
+
+    static async load(fileName: string): Promise<Contract | Script> {
+        return Contract.loadContract(fileName).catch(_ => Script.loadContract(fileName))
+    }
+
+    protected _saveToFile(): Promise<void> {
+        const artifactPath = Common._artifactPath(this.fileName)
+        return fsPromises.writeFile(artifactPath, this.toString())
+    }
+}
+
+export class Contract extends Common {
     fileName: string
     sourceCodeSha256: string
     bytecode: string
@@ -22,9 +137,6 @@ export class Contract {
     // cache address for contracts
     private _contractAddresses: Map<string, string>
 
-    static importRegex: RegExp = new RegExp('^import "[a-z][a-z_0-9]*.ral"', 'm')
-    static contractRegex: RegExp = new RegExp('^TxContract [A-Z][a-zA-Z0-9]*\\(', 'm')
-
     constructor(fileName: string,
                 sourceCodeSha256: string,
                 bytecode: string,
@@ -33,82 +145,34 @@ export class Contract {
                 functions: api.Function[],
                 events: api.Event[]
     ) {
-        this.fileName = fileName
-        this.sourceCodeSha256 = sourceCodeSha256
-        this.bytecode = bytecode
-        this.codeHash = codeHash
+        super(fileName, sourceCodeSha256, bytecode, codeHash, functions)
         this.fields = fields
-        this.functions = functions
         this.events = events
 
         this._contractAddresses = new Map<string, string>()
     }
 
-    private static _contractPath(fileName: string): string {
-        return `./contracts/${fileName}`
-    }
-
-    private static _artifactPath(fileName: string): string {
-        return `./artifacts/${fileName}.json`
-    }
-
-    private static _artifactFolder(): string {
-        return `./artifacts/`
-    }
-
-    static async handleImports(contractStr: string, importsCache: string[]): Promise<string> {
-        const localImportsCache: string[] = []
-        var result = contractStr.replace(Contract.importRegex, (match) => { localImportsCache.push(match); return ""})
-        for (const myImport of localImportsCache) {
-            const fileName = myImport.slice(8, -1)
-            if (!importsCache.includes(fileName)) {
-                importsCache.push(fileName)
-                const importContractStr = await Contract.loadContractStr(fileName, importsCache)
-                result = result.concat("\n", importContractStr)
-            }
-        }
-        return result
-    }
-
-    static async loadContractStr(fileName: string, importsCache: string[]): Promise<string> {
-        const contractPath = Contract._contractPath(fileName)
-        const contractBuffer = await fsPromises.readFile(contractPath)
-        const contractStr = contractBuffer.toString()
-        const contractMatches = this.contractRegex.exec(contractStr)
+    static checkCodeType(fileName: string, contractStr: string): void {
+        const contractMatches = Contract.contractRegex.exec(contractStr)
         if (isNull(contractMatches)) {
             throw new Error(`No contract found in: ${fileName}`)
         } else if (contractMatches.length > 1) {
             throw new Error(`Multiple contracts in: ${fileName}`)
-        } else {
-            return Contract.handleImports(contractStr, importsCache)
-        }
+        } else {}
     }
 
-    static checkFileNameExtension(fileName: string): void {
-        if (!fileName.endsWith('.ral')) {
-            throw new Error('Smart contract file name should end with ".ral"')
-        }
+    static async loadContractStr(fileName: string, importsCache: string[], variables?: any): Promise<string> {
+        const result = await Common._loadContractStr(fileName, importsCache, code => Contract.checkCodeType(fileName, code))
+        return Common._replaceVariables(result, variables)
     }
 
-    static async from(client: CliqueClient, fileName: string): Promise<Contract> {
-        Contract.checkFileNameExtension(fileName)
-
-        const contractStr = await Contract.loadContractStr(fileName, [])
-        const contractHash = cryptojs.SHA256(contractStr).toString()
-        try {
-            const existingContract = await this.loadContract(fileName)
-            if (existingContract.sourceCodeSha256 === contractHash) {
-                console.log("the contract is already compiled")
-                return existingContract
-            } else {
-                return Contract._from(client, fileName, contractStr, contractHash)
-            }
-        } catch(_) {
-            return Contract._from(client, fileName, contractStr, contractHash)
-        }
+    static async from(client: CliqueClient, fileName: string, variables?: any): Promise<Contract> {
+        return Common._from(client, fileName,
+            (fileName, importCaches) => Contract.loadContractStr(fileName, importCaches, variables),
+            Contract.loadContract, Contract.__from)
     }
 
-    private static async _from(client: CliqueClient, fileName: string, contractStr: string, contractHash: string): Promise<Contract> {
+    private static async __from(client: CliqueClient, fileName: string, contractStr: string, contractHash: string): Promise<Contract> {
         const compiled = (await client.contracts.postContractsCompileContract({code: contractStr})).data
         if (isNull(compiled.bytecode) || isNull(compiled.fields) || isNull(compiled.functions) || isNull(compiled.events)) {
             throw new Event("Compilation did not return the right data")
@@ -126,11 +190,6 @@ export class Contract {
             throw new Event("Compilation did not return the right data")
         }
         return new Contract(fileName, artifact.sourceCodeSha256, artifact.bytecode, artifact.codeHash, artifact.fields, artifact.functions, artifact.events)
-    }
-
-    private _saveToFile(): Promise<void> {
-        const artifactPath = Contract._artifactPath(this.fileName)
-        return fsPromises.writeFile(artifactPath, this.toString())
     }
 
     toString(): string {
@@ -238,18 +297,18 @@ export class Contract {
     }
 
     static async getContract(codeHash: string): Promise<Contract> {
-        const files = await fsPromises.readdir(Contract._artifactFolder())
+        const files = await fsPromises.readdir(Common._artifactFolder())
         for (const file of files) {
             if (file.endsWith(".ral.json")) {
                 const fileName = file.slice(0, -5)
-                const contract = await Contract.loadContract(fileName)
+                const contract = await Common.load(fileName)
                 if (contract.codeHash === codeHash) {
-                    return contract
+                    return contract as Contract
                 }
             }
         }
 
-        throw new Error(`Unkown code with codeHash: ${codeHash}`)
+        throw new Error(`Unknown code with codeHash: ${codeHash}`)
     }
 
     static async getFieldTypes(codeHash: string): Promise<string[]> {
@@ -285,6 +344,75 @@ export class Contract {
         }
         const response = await signer.client.contracts.postContractsUnsignedTxBuildContract(params)
         return fromApiDeployContractUnsignedTx(response.data)
+    }
+}
+
+export class Script extends Common {
+
+    constructor(fileName: string,
+                sourceCodeSha256: string,
+                bytecode: string,
+                codeHash: string,
+                functions: api.Function[]
+    ) {
+        super(fileName, sourceCodeSha256, bytecode, codeHash, functions)
+    }
+
+    static checkCodeType(fileName: string, contractStr: string): void {
+        const scriptMatches = this.scriptRegex.exec(contractStr)
+        if (isNull(scriptMatches)) {
+            throw new Error(`No script found in: ${fileName}`)
+        } else if (scriptMatches.length > 1) {
+            throw new Error(`Multiple scripts in: ${fileName}`)
+        } else {}
+    }
+
+    static async loadContractStr(fileName: string, importsCache: string[], variables?: any): Promise<string> {
+        const result = await Common._loadContractStr(fileName, importsCache, code => Script.checkCodeType(fileName, code))
+        return await Common._replaceVariables(result, variables)
+    }
+
+    static async from(client: CliqueClient, fileName: string, variables?: any): Promise<Script> {
+        return Common._from(client, fileName,
+            (fileName, importsCache) => Script.loadContractStr(fileName, importsCache, variables),
+            Script.loadContract, Script.__from)
+    }
+
+    private static async __from(client: CliqueClient, fileName: string, scriptStr: string, contractHash: string): Promise<Script> {
+        const compiled = (await client.contracts.postContractsCompileScript({code: scriptStr})).data
+        if (isNull(compiled.bytecode) || isNull(compiled.functions)) {
+            throw new Event("= Compilation did not return the right data")
+        }
+        const artifact = new Script(fileName, contractHash, compiled.bytecode, compiled.codeHash, compiled.functions)
+        await artifact._saveToFile()
+        return artifact
+    }
+
+    static async loadContract(fileName: string): Promise<Script> {
+        const artifactPath = Common._artifactPath(fileName)
+        const content = await fsPromises.readFile(artifactPath)
+        const artifact = JSON.parse(content.toString())
+        if (isNull(artifact.bytecode) || isNull(artifact.functions)) {
+            throw new Event("= Compilation did not return the right data")
+        }
+        return new Script(fileName, artifact.sourceCodeSha256, artifact.bytecode, artifact.codeHash, artifact.functions)
+    }
+
+    toString(): string {
+        return JSON.stringify({ sourceCodeSha256: this.sourceCodeSha256, bytecode: this.bytecode, codeHash: this.codeHash, functions: this.functions }, null, 2)
+    }
+
+    async transactionForDeployment(signer: Signer, params?: BuildScriptTx): Promise<BuildScriptTxResult> {
+        const apiParams: api.BuildScript = {
+            fromPublicKey: await signer.getPublicKey(),
+            code: this.bytecode,
+            amount: params && params.amount ? extractNumber256(params.amount) : undefined,
+            gas: params && params.gas ? params.gas : undefined,
+            gasPrice: params && params.gasPrice ? extractNumber256(params.gas) : undefined,
+            utxosLimit: params && params.utxosLimit ? params.utxosLimit : undefined
+        }
+        const response = await signer.client.contracts.postContractsUnsignedTxBuildScript(apiParams)
+        return response.data
     }
 }
 
@@ -530,4 +658,18 @@ export interface DeployContractTransaction {
 
 function fromApiDeployContractUnsignedTx(result: api.BuildContractResult): DeployContractTransaction {
     return result
+}
+
+export interface BuildScriptTx {
+    amount?: Number256;
+    gas?: number;
+    gasPrice?: Number256;
+    utxosLimit?: number;
+}
+
+export interface BuildScriptTxResult {
+    unsignedTx: string;
+    hash: string;
+    fromGroup: number;
+    toGroup: number;
 }
