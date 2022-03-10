@@ -337,7 +337,7 @@ export class Contract extends Common {
     }
 
     async transactionForDeployment(signer: Signer, initialFields?: Val[]): Promise<DeployContractTransaction> {
-        const params: api.BuildContract = {
+        const params: api.BuildContractDeployTx = {
             fromPublicKey: await signer.getPublicKey(),
             bytecode: this.bytecode,
             initialFields: this.toApiFields(initialFields)
@@ -649,7 +649,7 @@ export interface DeployContractTransaction {
     contractAddress: string
 }
 
-function fromApiDeployContractUnsignedTx(result: api.BuildContractResult): DeployContractTransaction {
+function fromApiDeployContractUnsignedTx(result: api.BuildContractDeployTxResult): DeployContractTransaction {
     return result
 }
 
