@@ -403,10 +403,10 @@ export class Script extends Common {
     }
 
     async transactionForDeployment(signer: Signer, params?: BuildScriptTx): Promise<BuildScriptTxResult> {
-        const apiParams: api.BuildScript = {
+        const apiParams: api.BuildScriptTx = {
             fromPublicKey: await signer.getPublicKey(),
-            code: this.bytecode,
-            amount: params && params.amount ? extractNumber256(params.amount) : undefined,
+            bytecode: this.bytecode,
+            alphAmount: params && params.alphAmount ? extractNumber256(params.alphAmount) : undefined,
             gas: params && params.gas ? params.gas : undefined,
             gasPrice: params && params.gasPrice ? extractNumber256(params.gas) : undefined,
             utxosLimit: params && params.utxosLimit ? params.utxosLimit : undefined
@@ -624,7 +624,7 @@ function fromApiOutput(output: api.Output): Output {
         return {
             type: "AssetOutput",
             address: asset.address,
-            alphAmount: decodeNumber256(asset.amount),
+            alphAmount: decodeNumber256(asset.alphAmount),
             tokens: asset.tokens.map(fromApiToken),
             lockTime: asset.lockTime,
             additionalData: asset.additionalData
@@ -634,7 +634,7 @@ function fromApiOutput(output: api.Output): Output {
         return {
             type: "ContractOutput",
             address: asset.address,
-            alphAmount: decodeNumber256(asset.amount),
+            alphAmount: decodeNumber256(asset.alphAmount),
             tokens: asset.tokens.map(fromApiToken)
         }
     } else {
@@ -654,7 +654,7 @@ function fromApiDeployContractUnsignedTx(result: api.BuildContractResult): Deplo
 }
 
 export interface BuildScriptTx {
-    amount?: Number256
+    alphAmount?: Number256
     gas?: number
     gasPrice?: Number256
     utxosLimit?: number
@@ -662,7 +662,6 @@ export interface BuildScriptTx {
 
 export interface BuildScriptTxResult {
     unsignedTx: string
-    hash: string
-    fromGroup: number
-    toGroup: number
+    txId: string
+    group: number
 }

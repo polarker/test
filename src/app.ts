@@ -51,7 +51,7 @@ async function test() {
     const mainScriptTx = await main.transactionForDeployment(signer)
     console.log("main tx result:")
     console.log(JSON.stringify(mainScriptTx, null, 2))
-    const mainSubmitResult = await signer.submitTransaction(mainScriptTx.unsignedTx, mainScriptTx.hash)
+    const mainSubmitResult = await signer.submitTransaction(mainScriptTx.unsignedTx, mainScriptTx.txId)
     console.log("main submission result:")
     console.log(JSON.stringify(mainSubmitResult, null, 2))
 }
