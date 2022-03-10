@@ -1,6 +1,4 @@
-import { CliqueClient } from "alephium-js"
-import { Contract, TestContractParams, Script } from "./contract"
-import { Signer } from "./signer"
+import { CliqueClient, Contract, Script, Signer, TestContractParams } from "alephium-js"
 
 (BigInt.prototype as any).toJSON = function () {
     return this.toString()
