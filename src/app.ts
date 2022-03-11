@@ -44,7 +44,6 @@ async function test() {
     const subAddress = subDeployTx.contractAddress
     const addAddress = addDeployTx.contractAddress
     const main = await Script.from(client, "main.ral", { addAddress: addAddress, subAddress: subAddress })
-    console.log(`main:\n${main}`)
 
     const mainScriptTx = await main.transactionForDeployment(signer)
     console.log("main tx result:")
